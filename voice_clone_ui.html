@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CosyVoice 音色克隆页面</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #fff;
+      --text: #1f2937;
+      --sub: #6b7280;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --border: #d1d5db;
+      --ok: #047857;
+      --err: #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 32px auto;
+      padding: 0 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+
+    .desc {
+      margin: 0;
+      color: var(--sub);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .dropzone {
+      margin-top: 14px;
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 22px;
+      text-align: center;
+      background: #fafcff;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .dropzone.dragover {
+      border-color: var(--primary);
+      background: #eef4ff;
+    }
+
+    .meta {
+      margin-top: 12px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"], textarea, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+      background: #fff;
+    }
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+      line-height: 1.6;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 180px;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 10px;
+      background: var(--primary);
+      color: #fff;
+      padding: 11px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn:hover { background: var(--primary-hover); }
+    .btn:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    .status {
+      margin-top: 10px;
+      min-height: 20px;
+      font-size: 14px;
+    }
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
+
+    .hint {
+      color: var(--sub);
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .hidden { display: none; }
+
+    @media (max-width: 720px) {
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>CosyVoice 音色克隆</h1>
+      <p class="desc">
+        拖拽上传参考音频，输入要生成的文本，点击“生成音频”。页面会显示音频信息，并提供合成结果播放与下载。
+      </p>
+    </div>
+
+    <div class="card">
+      <label>上传参考音频（支持 wav / m4a / mp3）</label>
+      <input id="fileInput" type="file" accept="audio/*" class="hidden" />
+      <div id="dropzone" class="dropzone">
+        <div>拖拽音频到这里，或点击选择文件</div>
+      </div>
+      <div id="meta" class="meta">尚未选择音频</div>
+      <audio id="refAudio" controls class="hidden"></audio>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label for="modeSelect">生成模式</label>
+          <select id="modeSelect">
+            <option value="zero_shot" selected>普通话优化（推荐）</option>
+            <option value="cross_lingual">跨语言克隆（无 prompt_text）</option>
+          </select>
+          <div class="hint">想要更标准普通话，请优先选择“普通话优化”。</div>
+        </div>
+        <div>
+          <label for="sampleRate">返回音频采样率</label>
+          <select id="sampleRate">
+            <option value="22050" selected>22050 (CosyVoice-300M)</option>
+            <option value="24000">24000 (CosyVoice2/3)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="height: 12px"></div>
+
+      <label for="promptText">参考音频原文（prompt_text）</label>
+      <textarea id="promptText" placeholder="这里填写参考音频里真实说的话。越准确，口音越稳。"></textarea>
+      <div class="hint">必须与上传音频内容尽量一致，否则会出现口音不稳、机械感明显。</div>
+
+      <div style="height: 12px"></div>
+
+      <label for="ttsText">输入要生成的文本</label>
+      <textarea id="ttsText" placeholder="例如：你好，这是我自己的克隆音色生成的标准普通话语音。"></textarea>
+
+      <div style="height: 12px"></div>
+
+      <label for="apiUrl">推理接口地址</label>
+      <input id="apiUrl" type="text" value="http://127.0.0.1:50000/inference_zero_shot" />
+      <div class="hint">默认使用 zero_shot。若选择跨语言模式，地址会自动切到 /inference_cross_lingual。</div>
+
+      <div style="height: 14px"></div>
+      <button id="generateBtn" class="btn">生成音频</button>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div class="card">
+      <label>生成结果</label>
+      <audio id="genAudio" controls class="hidden"></audio>
+      <div style="height: 10px"></div>
+      <a id="downloadLink" class="hidden" download="generated.wav">下载生成音频</a>
+      <div class="hint">如果声音过快/变调，优先把采样率切换到 24000 再试。</div>
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const meta = document.getElementById('meta');
+    const refAudio = document.getElementById('refAudio');
+    const modeSelect = document.getElementById('modeSelect');
+    const promptText = document.getElementById('promptText');
+    const ttsText = document.getElementById('ttsText');
+    const apiUrl = document.getElementById('apiUrl');
+    const sampleRateSelect = document.getElementById('sampleRate');
+    const generateBtn = document.getElementById('generateBtn');
+    const statusEl = document.getElementById('status');
+    const genAudio = document.getElementById('genAudio');
+    const downloadLink = document.getElementById('downloadLink');
+
+    let selectedFile = null;
+    let refObjectUrl = null;
+    let genObjectUrl = null;
+
+    function updateModeUI() {
+      const mode = modeSelect.value;
+      if (mode === 'zero_shot') {
+        apiUrl.value = 'http://127.0.0.1:50000/inference_zero_shot';
+        promptText.disabled = false;
+        promptText.placeholder = '这里填写参考音频里真实说的话。越准确，口音越稳。';
+      } else {
+        apiUrl.value = 'http://127.0.0.1:50000/inference_cross_lingual';
+        promptText.disabled = true;
+        promptText.placeholder = '跨语言模式下无需填写 prompt_text';
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      const kb = bytes / 1024;
+      if (kb < 1024) return `${kb.toFixed(1)} KB`;
+      return `${(kb / 1024).toFixed(2)} MB`;
+    }
+
+    function setStatus(msg, type = '') {
+      statusEl.textContent = msg;
+      statusEl.className = `status ${type}`;
+    }
+
+    function handleFile(file) {
+      if (!file || !file.type.startsWith('audio/')) {
+        setStatus('请上传音频文件。', 'err');
+        return;
+      }
+      selectedFile = file;
+
+      if (refObjectUrl) URL.revokeObjectURL(refObjectUrl);
+      refObjectUrl = URL.createObjectURL(file);
+      refAudio.src = refObjectUrl;
+      refAudio.classList.remove('hidden');
+
+      const baseInfo = `文件名：${file.name} | 大小：${formatBytes(file.size)} | 类型：${file.type || '未知'}`;
+      meta.textContent = baseInfo;
+
+      refAudio.onloadedmetadata = () => {
+        const duration = Number.isFinite(refAudio.duration) ? refAudio.duration.toFixed(2) : '未知';
+        meta.textContent = `${baseInfo} | 时长：${duration} 秒`;
+      };
+
+      setStatus('参考音频已就绪。', 'ok');
+    }
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFile(e.target.files?.[0]));
+    modeSelect.addEventListener('change', updateModeUI);
+    updateModeUI();
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      handleFile(file);
+    });
+
+    function pcm16ToWavBlob(pcmBuffer, sampleRate = 22050, channels = 1) {
+      const dataSize = pcmBuffer.byteLength;
+      const headerSize = 44;
+      const wavBuffer = new ArrayBuffer(headerSize + dataSize);
+      const view = new DataView(wavBuffer);
+
+      function writeString(offset, str) {
+        for (let i = 0; i < str.length; i++) {
+          view.setUint8(offset + i, str.charCodeAt(i));
+        }
+      }
+
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, channels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * channels * 2, true);
+      view.setUint16(32, channels * 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, dataSize, true);
+
+      new Uint8Array(wavBuffer, 44).set(new Uint8Array(pcmBuffer));
+      return new Blob([wavBuffer], { type: 'audio/wav' });
+    }
+
+    generateBtn.addEventListener('click', async () => {
+      if (!selectedFile) {
+        setStatus('请先上传参考音频。', 'err');
+        return;
+      }
+      const text = ttsText.value.trim();
+      if (!text) {
+        setStatus('请输入要生成的文本。', 'err');
+        return;
+      }
+
+      const endpoint = apiUrl.value.trim();
+      if (!endpoint) {
+        setStatus('请填写推理接口地址。', 'err');
+        return;
+      }
+
+      const mode = modeSelect.value;
+      const prompt = promptText.value.trim();
+      if (mode === 'zero_shot' && !prompt) {
+        setStatus('普通话优化模式必须填写参考音频原文（prompt_text）。', 'err');
+        return;
+      }
+
+      generateBtn.disabled = true;
+      setStatus('正在生成，请稍候...', '');
+
+      try {
+        const formData = new FormData();
+        formData.append('tts_text', text);
+        formData.append('prompt_wav', selectedFile);
+        if (mode === 'zero_shot') {
+          formData.append('prompt_text', prompt);
+        }
+
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`接口返回失败 (${resp.status})：${errText || '未知错误'}`);
+        }
+
+        const pcmBuffer = await resp.arrayBuffer();
+        if (!pcmBuffer.byteLength) {
+          throw new Error('返回结果为空。');
+        }
+
+        const sampleRate = Number(sampleRateSelect.value) || 22050;
+        const wavBlob = pcm16ToWavBlob(pcmBuffer, sampleRate, 1);
+
+        if (genObjectUrl) URL.revokeObjectURL(genObjectUrl);
+        genObjectUrl = URL.createObjectURL(wavBlob);
+
+        genAudio.src = genObjectUrl;
+        genAudio.classList.remove('hidden');
+
+        downloadLink.href = genObjectUrl;
+        downloadLink.classList.remove('hidden');
+
+        setStatus('生成成功，可以直接播放或下载。', 'ok');
+      } catch (err) {
+        setStatus(`生成失败：${err.message}`, 'err');
+      } finally {
+        generateBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
